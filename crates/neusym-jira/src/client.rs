@@ -52,7 +52,8 @@ impl JiraClient {
 #[async_trait]
 impl IssueProvider for JiraClient {
     async fn search(&self, query: &str) -> Result<Vec<NormalizedIssue>> {
-        let jql = format!("summary ~ \"{}\" ORDER BY updated DESC", query);
+        let escaped = query.replace('\\', "\\\\").replace('"', "\\\"");
+        let jql = format!("summary ~ \"{}\" ORDER BY updated DESC", escaped);
         let url = format!("{}/rest/api/3/search", self.base_url);
         let resp = self
             .client
@@ -136,6 +137,19 @@ impl IssueProvider for JiraClient {
             .as_str()
             .ok_or_else(|| NeusymError::Provider("Jira create: no key in response".to_string()))?;
         self.get(key).await
+    }
+
+    async fn ping(&self) -> Result<()> {
+        let url = format!("{}/rest/api/3/myself", self.base_url);
+        self.client
+            .get(&url)
+            .basic_auth(&self.email, Some(&self.api_token))
+            .send()
+            .await
+            .map_err(|e| NeusymError::Http(e.to_string()))?
+            .error_for_status()
+            .map_err(|e| NeusymError::Http(e.to_string()))?;
+        Ok(())
     }
 
     async fn update(&self, identifier: &str, issue: &NormalizedIssue) -> Result<NormalizedIssue> {

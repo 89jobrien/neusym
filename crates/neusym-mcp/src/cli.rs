@@ -1,5 +1,25 @@
-use clap::{Parser, Subcommand};
-use neusym_core::{Provider, SyncDirection};
+use clap::{Parser, Subcommand, ValueEnum};
+use neusym_core::{ConflictStrategy, Provider, SyncDirection};
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliStrategy {
+    #[value(alias = "source_wins")]
+    SourceWins,
+    #[value(alias = "target_wins")]
+    TargetWins,
+    #[value(alias = "report_only")]
+    ReportOnly,
+}
+
+impl From<CliStrategy> for ConflictStrategy {
+    fn from(s: CliStrategy) -> Self {
+        match s {
+            CliStrategy::SourceWins => ConflictStrategy::SourceWins,
+            CliStrategy::TargetWins => ConflictStrategy::TargetWins,
+            CliStrategy::ReportOnly => ConflictStrategy::ReportOnly,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "neusym", about = "Jira/Linear sync bridge")]
@@ -42,7 +62,11 @@ pub enum SyncCommand {
     /// Link two issues for sync
     Link {
         #[arg(long)]
+        source_provider: Provider,
+        #[arg(long)]
         source: String,
+        #[arg(long)]
+        target_provider: Provider,
         #[arg(long)]
         target: String,
         #[arg(long, default_value = "bidirectional")]
@@ -52,7 +76,7 @@ pub enum SyncCommand {
     Push {
         mapping_id: String,
         #[arg(long, default_value = "source-wins")]
-        strategy: String,
+        strategy: CliStrategy,
     },
     /// Show all sync mappings
     Status,

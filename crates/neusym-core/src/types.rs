@@ -52,6 +52,7 @@ pub struct SyncEvent {
 pub enum SyncAction {
     Created,
     Updated,
+    InSync,
     Conflict {
         field: String,
         source: String,
@@ -62,7 +63,7 @@ pub enum SyncAction {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Credential {
     Linear {
@@ -73,6 +74,25 @@ pub enum Credential {
         email: String,
         api_token: String,
     },
+}
+
+impl std::fmt::Debug for Credential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Credential::Linear { .. } => f
+                .debug_struct("Linear")
+                .field("api_key", &"[REDACTED]")
+                .finish(),
+            Credential::Jira {
+                base_url, email, ..
+            } => f
+                .debug_struct("Jira")
+                .field("base_url", base_url)
+                .field("email", email)
+                .field("api_token", &"[REDACTED]")
+                .finish(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -135,6 +155,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn credential_debug_redacts_linear_api_key() {
+        let cred = Credential::Linear {
+            api_key: "lin_api_supersecret123".to_string(),
+        };
+        let debug = format!("{:?}", cred);
+        assert!(
+            !debug.contains("supersecret"),
+            "Debug output must not contain the raw API key: {debug}"
+        );
+        assert!(
+            debug.contains("REDACTED"),
+            "Debug output should show REDACTED: {debug}"
+        );
+    }
+
+    #[test]
+    fn credential_debug_redacts_jira_token() {
+        let cred = Credential::Jira {
+            base_url: "https://example.atlassian.net".to_string(),
+            email: "a@b.com".to_string(),
+            api_token: "jira_secret_token_456".to_string(),
+        };
+        let debug = format!("{:?}", cred);
+        assert!(
+            !debug.contains("jira_secret_token"),
+            "Debug output must not contain the raw API token: {debug}"
+        );
+        assert!(
+            debug.contains("REDACTED"),
+            "Debug output should show REDACTED: {debug}"
+        );
+    }
+
+    #[test]
     fn credential_linear_round_trips() {
         let cred = Credential::Linear {
             api_key: "test-key".to_string(),
@@ -178,6 +232,13 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: ConflictStrategy = serde_json::from_str(&json).unwrap();
         assert!(matches!(back, ConflictStrategy::FieldLevel(v) if v.len() == 2));
+    }
+
+    #[test]
+    fn sync_action_in_sync_serializes() {
+        let action = SyncAction::InSync;
+        let json = serde_json::to_string(&action).unwrap();
+        assert_eq!(json, r#""in_sync""#);
     }
 
     #[test]

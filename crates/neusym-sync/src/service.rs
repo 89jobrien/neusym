@@ -69,8 +69,8 @@ impl NeusymService {
             },
             Ok(creds) => {
                 let client = Self::make_provider(&creds);
-                match client.search("__ping__").await {
-                    Ok(_) => ProviderHealth {
+                match client.ping().await {
+                    Ok(()) => ProviderHealth {
                         provider,
                         reachable: true,
                         latency_ms: Some(start.elapsed().as_millis() as u64),
@@ -128,12 +128,19 @@ impl ProviderQuery for NeusymService {
 
 #[async_trait]
 impl SyncOperations for NeusymService {
-    async fn link(&self, source: &str, target: &str, direction: SyncDirection) -> Result<Mapping> {
-        let source_creds = self.resolver.resolve(Provider::Linear).await?;
+    async fn link(
+        &self,
+        source_provider: Provider,
+        source: &str,
+        target_provider: Provider,
+        target: &str,
+        direction: SyncDirection,
+    ) -> Result<Mapping> {
+        let source_creds = self.resolver.resolve(source_provider).await?;
         let source_client = Self::make_provider(&source_creds);
         let source_issue = source_client.get(source).await?;
 
-        let target_creds = self.resolver.resolve(Provider::Jira).await?;
+        let target_creds = self.resolver.resolve(target_provider).await?;
         let target_client = Self::make_provider(&target_creds);
         let target_issue = target_client.get(target).await?;
 
@@ -186,54 +193,52 @@ impl SyncOperations for NeusymService {
 
         let event = match strategy {
             ConflictStrategy::ReportOnly => {
-                let mut conflicts = vec![];
-                if source_issue.title != target_issue.title {
-                    conflicts.push("title".to_string());
-                }
-                if source_issue.description != target_issue.description {
-                    conflicts.push("description".to_string());
-                }
-                if source_issue.status != target_issue.status {
-                    conflicts.push("status".to_string());
-                }
-                if source_issue.priority != target_issue.priority {
-                    conflicts.push("priority".to_string());
-                }
+                let drifted = diff_fields(&source_issue, &target_issue);
                 SyncEvent {
                     mapping_id: mapping.id.clone(),
                     timestamp: Utc::now(),
-                    action: if conflicts.is_empty() {
-                        SyncAction::Updated
+                    action: if drifted.is_empty() {
+                        SyncAction::InSync
                     } else {
                         SyncAction::Conflict {
-                            field: conflicts.join(", "),
+                            field: drifted.join(", "),
                             source: source_issue.identifier.clone(),
                             target: target_issue.identifier.clone(),
                         }
                     },
-                    fields_changed: conflicts,
+                    fields_changed: drifted,
                 }
             }
             ConflictStrategy::SourceWins => {
+                let changed = diff_fields(&source_issue, &target_issue);
                 target_client
                     .update(&mapping.target.identifier, &source_issue)
                     .await?;
                 SyncEvent {
                     mapping_id: mapping.id.clone(),
                     timestamp: Utc::now(),
-                    action: SyncAction::Updated,
-                    fields_changed: vec!["title".into(), "description".into(), "status".into()],
+                    action: if changed.is_empty() {
+                        SyncAction::InSync
+                    } else {
+                        SyncAction::Updated
+                    },
+                    fields_changed: changed,
                 }
             }
             ConflictStrategy::TargetWins => {
+                let changed = diff_fields(&target_issue, &source_issue);
                 source_client
                     .update(&mapping.source.identifier, &target_issue)
                     .await?;
                 SyncEvent {
                     mapping_id: mapping.id.clone(),
                     timestamp: Utc::now(),
-                    action: SyncAction::Updated,
-                    fields_changed: vec!["title".into(), "description".into(), "status".into()],
+                    action: if changed.is_empty() {
+                        SyncAction::InSync
+                    } else {
+                        SyncAction::Updated
+                    },
+                    fields_changed: changed,
                 }
             }
             ConflictStrategy::FieldLevel(ref resolutions) => {
@@ -287,7 +292,7 @@ impl HealthCheck for NeusymService {
         let jira = self.ping_provider(Provider::Jira).await;
 
         let mappings = self.mapping_store.load().await?;
-        let stale_threshold = chrono::Duration::hours(24);
+        let stale_threshold = chrono::TimeDelta::hours(24);
         let now = Utc::now();
         let stale = mappings
             .iter()
@@ -311,6 +316,29 @@ impl HealthCheck for NeusymService {
 
         Ok(report)
     }
+}
+
+fn diff_fields(a: &NormalizedIssue, b: &NormalizedIssue) -> Vec<String> {
+    let mut changed = vec![];
+    if a.title != b.title {
+        changed.push("title".into());
+    }
+    if a.description != b.description {
+        changed.push("description".into());
+    }
+    if a.status != b.status {
+        changed.push("status".into());
+    }
+    if a.priority != b.priority {
+        changed.push("priority".into());
+    }
+    if a.labels != b.labels {
+        changed.push("labels".into());
+    }
+    if a.assignee != b.assignee {
+        changed.push("assignee".into());
+    }
+    changed
 }
 
 fn apply_field(target: &mut NormalizedIssue, field: &str, source: &NormalizedIssue) {

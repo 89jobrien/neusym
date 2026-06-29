@@ -21,3 +21,4 @@ rmcp = { workspace = true }
 schemars = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
+obfsck = { workspace = true }

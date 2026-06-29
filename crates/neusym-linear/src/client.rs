@@ -100,12 +100,18 @@ impl IssueProvider for LinearClient {
 
     async fn get(&self, identifier: &str) -> Result<NormalizedIssue> {
         let gql = format!(
-            "query($id: String!) {{ issue(id: $id) {{ {} }} }}",
+            "query($filter: IssueFilter) {{ issues(filter: $filter, first: 1) {{ nodes {{ {} }} }} }}",
             ISSUE_FIELDS
         );
-        let variables = serde_json::json!({ "id": identifier });
+        let variables = serde_json::json!({ "filter": { "identifier": { "eq": identifier } } });
         let data = self.graphql(&gql, variables).await?;
-        Ok(Self::parse_issue(&data["data"]["issue"]))
+        let node = &data["data"]["issues"]["nodes"][0];
+        if node.is_null() {
+            return Err(NeusymError::Provider(format!(
+                "Linear issue not found: {identifier}"
+            )));
+        }
+        Ok(Self::parse_issue(node))
     }
 
     async fn create(&self, issue: &NormalizedIssue) -> Result<NormalizedIssue> {
@@ -132,6 +138,16 @@ impl IssueProvider for LinearClient {
                 "Linear issueCreate failed".to_string(),
             ))
         }
+    }
+
+    async fn ping(&self) -> Result<()> {
+        let data = self
+            .graphql("query { viewer { id } }", serde_json::json!({}))
+            .await?;
+        if data["data"]["viewer"]["id"].is_null() {
+            return Err(NeusymError::Provider("Linear viewer query failed".into()));
+        }
+        Ok(())
     }
 
     async fn update(&self, identifier: &str, issue: &NormalizedIssue) -> Result<NormalizedIssue> {

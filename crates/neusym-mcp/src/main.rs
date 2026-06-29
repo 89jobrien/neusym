@@ -6,7 +6,6 @@ use std::sync::Arc;
 use clap::Parser;
 use rmcp::ServiceExt;
 
-use neusym_core::ConflictStrategy;
 use neusym_core::ports::{HealthCheck, ProviderQuery, SyncOperations};
 use neusym_sync::{EnvCredentialResolver, FileOutputStore, JsonMappingStore, NeusymService};
 
@@ -19,15 +18,6 @@ fn build_service() -> Arc<NeusymService> {
         Box::new(JsonMappingStore::new(JsonMappingStore::default_path())),
         Box::new(FileOutputStore::new(FileOutputStore::default_path())),
     ))
-}
-
-fn parse_strategy(s: &str) -> ConflictStrategy {
-    match s {
-        "source-wins" | "source_wins" => ConflictStrategy::SourceWins,
-        "target-wins" | "target_wins" => ConflictStrategy::TargetWins,
-        "report-only" | "report_only" => ConflictStrategy::ReportOnly,
-        _ => ConflictStrategy::SourceWins,
-    }
 }
 
 #[tokio::main]
@@ -74,12 +64,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Sync { action } => match action {
             SyncCommand::Link {
+                source_provider,
                 source,
+                target_provider,
                 target,
                 direction,
             } => {
                 let svc = build_service();
-                let mapping = svc.link(&source, &target, direction).await?;
+                let mapping = svc
+                    .link(
+                        source_provider,
+                        &source,
+                        target_provider,
+                        &target,
+                        direction,
+                    )
+                    .await?;
                 if cli.json {
                     println!("{}", serde_json::to_string_pretty(&mapping)?);
                 } else {
@@ -94,8 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 strategy,
             } => {
                 let svc = build_service();
-                let strategy = parse_strategy(&strategy);
-                let event = svc.push(&mapping_id, strategy).await?;
+                let event = svc.push(&mapping_id, strategy.into()).await?;
                 if cli.json {
                     println!("{}", serde_json::to_string_pretty(&event)?);
                 } else {

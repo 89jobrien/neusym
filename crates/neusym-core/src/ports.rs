@@ -11,6 +11,11 @@ pub trait IssueProvider: Send + Sync {
     async fn get(&self, identifier: &str) -> Result<NormalizedIssue>;
     async fn create(&self, issue: &NormalizedIssue) -> Result<NormalizedIssue>;
     async fn update(&self, identifier: &str, issue: &NormalizedIssue) -> Result<NormalizedIssue>;
+
+    /// Lightweight connectivity check. Defaults to a minimal search.
+    async fn ping(&self) -> Result<()> {
+        self.search("__ping__").await.map(|_| ())
+    }
 }
 
 #[async_trait]
@@ -31,7 +36,14 @@ pub trait ProviderQuery: Send + Sync {
 
 #[async_trait]
 pub trait SyncOperations: Send + Sync {
-    async fn link(&self, source: &str, target: &str, direction: SyncDirection) -> Result<Mapping>;
+    async fn link(
+        &self,
+        source_provider: Provider,
+        source: &str,
+        target_provider: Provider,
+        target: &str,
+        direction: SyncDirection,
+    ) -> Result<Mapping>;
     async fn push(&self, mapping_id: &str, strategy: ConflictStrategy) -> Result<SyncEvent>;
     async fn status(&self) -> Result<Vec<Mapping>>;
 }

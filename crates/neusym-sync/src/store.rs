@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use neusym_core::ports::MappingStore;
 use neusym_core::{Mapping, Result};
+use tokio::fs;
 
 /// JSON file-backed mapping store.
 pub struct JsonMappingStore {
@@ -29,17 +30,17 @@ impl MappingStore for JsonMappingStore {
         if !self.path.exists() {
             return Ok(vec![]);
         }
-        let data = std::fs::read_to_string(&self.path)?;
+        let data = fs::read_to_string(&self.path).await?;
         let mappings: Vec<Mapping> = serde_json::from_str(&data)?;
         Ok(mappings)
     }
 
     async fn save(&self, mappings: &[Mapping]) -> Result<()> {
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).await?;
         }
         let data = serde_json::to_string_pretty(mappings)?;
-        std::fs::write(&self.path, data)?;
+        fs::write(&self.path, data).await?;
         Ok(())
     }
 

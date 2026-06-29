@@ -31,3 +31,4 @@ crux-types = { path = "../crux/crates/crux-types" }
 schemars = "0.8"
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
+obfsck = { path = "../obfsck", default-features = false }
