@@ -1,0 +1,22 @@
+[package]
+name = "neusym-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+cli = ["clap"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+miette = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+crux-types = { workspace = true }
+schemars = { workspace = true }
+async-trait = { workspace = true }
+clap = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
