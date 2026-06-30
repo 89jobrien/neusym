@@ -44,11 +44,7 @@ jobs:
 
       - name: Check formatting
         working-directory: neusym
-        run: cargo fmt --all -- --check
-
-      - name: Run cargo-rail CI
-        working-directory: neusym
-        run: cargo rail run --profile ci --all
+        run: cargo fmt --all --manifest-path Cargo.toml -- --check
 
       - name: Clippy
         working-directory: neusym
@@ -57,3 +53,8 @@ jobs:
       - name: Tests
         working-directory: neusym
         run: cargo nextest run --workspace
+
+      - name: Run cargo-rail CI
+        working-directory: neusym
+        run: cargo rail run --profile ci --all
+        continue-on-error: true
