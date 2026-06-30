@@ -44,7 +44,12 @@ jobs:
 
       - name: Check formatting
         working-directory: neusym
-        run: cargo fmt --all --manifest-path Cargo.toml -- --check
+        run: |
+          cargo fmt -p neusym-core -- --check
+          cargo fmt -p neusym-linear -- --check
+          cargo fmt -p neusym-jira -- --check
+          cargo fmt -p neusym-sync -- --check
+          cargo fmt -p neusym-mcp -- --check
 
       - name: Clippy
         working-directory: neusym
