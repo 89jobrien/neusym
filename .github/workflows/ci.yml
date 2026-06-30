@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  ci:
+    name: CI Pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: neusym
+
+      - uses: actions/checkout@v4
+        with:
+          repository: 89jobrien/crux
+          path: crux
+
+      - uses: actions/checkout@v4
+        with:
+          repository: 89jobrien/obfsck
+          path: obfsck
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: taiki-e/install-action@nextest
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: neusym
+
+      - name: Install cargo-rail
+        run: cargo install cargo-rail
+
+      - name: Check formatting
+        working-directory: neusym
+        run: cargo fmt --all -- --check
+
+      - name: Run cargo-rail CI
+        working-directory: neusym
+        run: cargo rail run --profile ci --all
+
+      - name: Clippy
+        working-directory: neusym
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Tests
+        working-directory: neusym
+        run: cargo nextest run --workspace
