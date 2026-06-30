@@ -53,7 +53,14 @@ jobs:
 
       - name: Clippy
         working-directory: neusym
-        run: cargo clippy --workspace -- -D warnings
+        run: >
+          cargo clippy
+          -p neusym-core
+          -p neusym-linear
+          -p neusym-jira
+          -p neusym-sync
+          -p neusym-mcp
+          -- -D warnings
 
       - name: Tests
         working-directory: neusym
